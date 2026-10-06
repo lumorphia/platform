@@ -8,17 +8,19 @@ lumorphia/platform: Lumorphia のサービス (Prismtone、Scenote、今後の F
 ```
 packages/media    @lumorphia/media    画像の検証、メタデータの除去、派生画像とアイコン (sharp)
 packages/storage  @lumorphia/storage  オブジェクトストレージの境界と実装 (S3 互換、ファイル、メモリ)、署名付き URL
+packages/ops      @lumorphia/ops      運用の土台。入口は logger (pino、Node 専用)、notify (Discord)、sentry (伏せ字、ブラウザでも動く)
 tooling/          リポジトリ全体の決まりのテスト (依存の向き、公開する package.json)
 docs/adr/         設計判断
 ```
 
-中身は lumorphia/prismtone の `packages/core/src/adapters/{image,storage}` から移した。本文やコメントの `prismtone ADR-NNNN`、`docs/design/NN` は prismtone のもの。
+中身は lumorphia/prismtone の `packages/core/src/adapters/{image,storage,notify}`、`logger.ts`、`packages/shared/src/monitoring/` から移した。本文やコメントの `prismtone ADR-NNNN`、`docs/design/NN` は prismtone のもの。
 
 ## 依存の方向 (ESLint が強制する。tooling/eslint-boundaries.test.ts が確かめる)
 
 - どのパッケージもサービス (`@prismtone/*`、`@scenote/*` など) を import しない。サービスの都合は引数やアダプターで受け取る
 - どのパッケージも private の umbra (`@lumorphia/moderation`) を import しない。向きは umbra -> platform だけ
 - `media` は置き場所を知らない (`storage` と S3 を使わない)。`storage` は中身を知らない (`media` と sharp を使わない)
+- `ops` は画像もストレージも知らない。`ops/sentry` はブラウザでも動くので、Node API と pino を使わない
 - ほかのパッケージは `package.json` の exports から使う (`/src/` や `/dist/` を直接指さない)
 - **パッケージはサービスの DB のテーブルを持たない**。関数とアダプターと型を出す
 - キーの付け方 (`tmp/`、`posts/` など) はサービスが決める。`storage` は知らない
