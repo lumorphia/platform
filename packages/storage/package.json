@@ -1,0 +1,38 @@
+{
+  "name": "@lumorphia/storage",
+  "version": "0.0.0",
+  "description": "オブジェクトストレージの境界と実装 (S3 互換、ファイル、メモリ)。署名付き URL を含む",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lumorphia/platform.git",
+    "directory": "packages/storage"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepack": "cp ../../LICENSE LICENSE",
+    "postpack": "rm -f LICENSE"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ],
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1146.0",
+    "@aws-sdk/s3-request-presigner": "^3.1146.0"
+  }
+}
