@@ -1,6 +1,6 @@
 {
   "name": "@lumorphia/storage",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "オブジェクトストレージの境界と実装 (S3 互換、ファイル、メモリ)。署名付き URL を含む",
   "license": "AGPL-3.0-only",
   "repository": {
