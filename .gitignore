@@ -1,0 +1,11 @@
+*:Zone.Identifier
+.env
+.env.*
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# 公開のときにリポジトリの LICENSE を写す (prepack)
+packages/*/LICENSE
