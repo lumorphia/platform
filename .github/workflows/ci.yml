@@ -1,0 +1,122 @@
+name: ci
+
+# 検査は PR でだけ回す。develop / main への push (= マージ) では、PR で確かめた中身を回し直さない。
+# public リポジトリなので Actions の時間は org の上限を使わない (docs/adr/0002)。
+# main への push (= リリース PR のマージ) では release-please と公開 (release ジョブ) だけを回す
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 同じ PR への連続 push で古い run を取り消す
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    # storage の結合テスト (S3 互換) の相手。lumorphia/prismtone のローカル S3 と同じ RustFS (prismtone ADR-0026)
+    services:
+      rustfs:
+        image: rustfs/rustfs:1.0.0
+        env:
+          RUSTFS_ACCESS_KEY: platform
+          RUSTFS_SECRET_KEY: platform-test-secret
+        ports:
+          - 9000:9000
+    env:
+      S3_TEST_ENDPOINT: http://127.0.0.1:9000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      # CI=true なので、S3_TEST_ENDPOINT が無いと storage の結合テストは skip ではなく失敗する
+      - run: pnpm test:coverage
+      - run: pnpm build:packages
+
+  # シークレットの混入と高リスクの脆弱性。audit は警告に留める
+  security:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # gitleaks の本体 (CLI、MIT) を直接動かす。gitleaks-action は organization のリポジトリではライセンスキーが要る。
+      # 版とチェックサムは公式の gitleaks_<版>_checksums.txt から。lumorphia/editor と同じ版
+      - name: gitleaks (履歴全体)
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -euo pipefail
+          curl -fsSLo /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks git --redact --no-banner --verbose .
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # 失敗にすると、上流の修正を待つあいだ全ての PR が止まる。結果は Actions の注釈で見て、Renovate で上げる
+      - name: pnpm audit (high 以上。警告)
+        run: pnpm audit --audit-level=high --prod
+        continue-on-error: true
+
+  # main に積まれた Conventional Commits から release-please がパッケージごとのリリース PR (版と CHANGELOG.md) を
+  # 開き直す。そのリリース PR をマージした push で、版が上がったパッケージだけを GitHub Packages に公開する
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: write
+    steps:
+      # GITHUB_TOKEN が開いた PR では ci が走らない (Actions の再帰防止)。リリース PR は版と CHANGELOG だけなので
+      # 検査は要らないが、required check にするなら RELEASE_PLEASE_TOKEN (PAT) を secrets に入れる
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+      - if: steps.release.outputs.releases_created == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: steps.release.outputs.releases_created == 'true'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - if: steps.release.outputs.releases_created == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: "@lumorphia"
+      - if: steps.release.outputs.releases_created == 'true'
+        run: pnpm install --frozen-lockfile
+      - if: steps.release.outputs.releases_created == 'true'
+        run: pnpm build:packages
+      # paths_released は今回リリースしたパッケージのパスの JSON 配列 (例: ["packages/media"])。
+      # release-please-action の src/index.ts (outputReleases) が出す
+      - if: steps.release.outputs.releases_created == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PATHS_RELEASED: ${{ steps.release.outputs.paths_released }}
+        run: |
+          set -euo pipefail
+          for path in $(jq -r '.[]' <<<"$PATHS_RELEASED"); do
+            pnpm --filter "./${path}" publish --no-git-checks
+          done
