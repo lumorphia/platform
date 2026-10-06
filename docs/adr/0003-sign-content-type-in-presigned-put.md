@@ -49,3 +49,11 @@ Prismtone の本番では、公開ドメインの WAF が `/posts/` 以外を拒
 
 - lumorphia/prismtone ADR-0006、docs/design/03-image-pipeline.md
 - `packages/storage/src/s3.ts`、`packages/storage/src/s3.test.ts`
+
+## 追記 (2026-10-06): 本番の R2 で確かめた
+
+lumorphia/prismtone v1.11.3 (`@lumorphia/storage` 1.0.0) を本番に入れたあと、Cloudflare R2 で確かめた。
+
+- `X-Amz-SignedHeaders` は `content-length;content-type;host`
+- `image/png` で発行した URL に `text/html` で PUT すると 403、`image/png` で PUT すると 200
+- 画面からの普通の投稿 (ブラウザが発行時の `headers` を付けて PUT する) は通る

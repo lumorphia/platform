@@ -54,6 +54,10 @@
     "packages/storage": {
       "component": "storage",
       "package-name": "@lumorphia/storage"
+    },
+    "packages/ops": {
+      "component": "ops",
+      "package-name": "@lumorphia/ops"
     }
   }
 }

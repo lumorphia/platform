@@ -10,7 +10,7 @@ async function restricted(filePath: string, code: string): Promise<boolean> {
 }
 
 describe("eslint boundaries", () => {
-  it.each(["packages/media/src/x.ts", "packages/storage/src/x.ts"])(
+  it.each(["packages/media/src/x.ts", "packages/storage/src/x.ts", "packages/ops/src/x.ts"])(
     "keeps %s free of the services",
     async (file) => {
       expect(await restricted(file, 'import "@prismtone/core";')).toBe(true);
@@ -18,7 +18,7 @@ describe("eslint boundaries", () => {
     },
   );
 
-  it.each(["packages/media/src/x.ts", "packages/storage/src/x.ts"])(
+  it.each(["packages/media/src/x.ts", "packages/storage/src/x.ts", "packages/ops/src/x.ts"])(
     "keeps %s free of the private umbra",
     async (file) => {
       expect(await restricted(file, 'import "@lumorphia/moderation";')).toBe(true);
@@ -51,5 +51,21 @@ describe("eslint boundaries", () => {
     expect(await restricted("packages/storage/src/x.ts", 'import "@aws-sdk/client-s3";')).toBe(
       false,
     );
+  });
+
+  it("keeps ops free of media and storage", async () => {
+    expect(await restricted("packages/ops/src/x.ts", 'import "@lumorphia/storage";')).toBe(true);
+  });
+
+  it("keeps the sentry entry free of Node APIs", async () => {
+    expect(await restricted("packages/ops/src/sentry.ts", 'import "node:stream";')).toBe(true);
+  });
+
+  it("keeps the sentry entry free of the logger", async () => {
+    expect(await restricted("packages/ops/src/sentry.ts", 'import "pino";')).toBe(true);
+  });
+
+  it("lets the logger use pino", async () => {
+    expect(await restricted("packages/ops/src/logger.ts", 'import "pino";')).toBe(false);
   });
 });
