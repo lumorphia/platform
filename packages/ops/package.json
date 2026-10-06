@@ -1,6 +1,6 @@
 {
   "name": "@lumorphia/ops",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "運用の土台。ロガー (pino、シークレットを伏せる)、運営への通知 (Discord)、Sentry に送る前の伏せ字",
   "license": "AGPL-3.0-only",
   "repository": {

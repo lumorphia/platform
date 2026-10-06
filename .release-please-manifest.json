@@ -1,5 +1,5 @@
 {
   "packages/media": "1.0.0",
   "packages/storage": "1.0.0",
-  "packages/ops": "0.0.0"
+  "packages/ops": "1.0.0"
 }
