@@ -1,0 +1,38 @@
+{
+  "name": "@lumorphia/media",
+  "version": "0.0.0",
+  "description": "画像の検証、メタデータの除去、派生画像とアイコンの生成 (sharp)。サーバーで動く",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lumorphia/platform.git",
+    "directory": "packages/media"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepack": "cp ../../LICENSE LICENSE",
+    "postpack": "rm -f LICENSE"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ],
+  "dependencies": {
+    "blurhash": "^2.0.5",
+    "sharp": "^0.35.5"
+  }
+}
