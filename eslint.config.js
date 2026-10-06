@@ -46,6 +46,41 @@ const storage = {
   ]),
 };
 
+const NODE_APIS = ["node:*", "fs", "path", "crypto", "os", "child_process", "stream"];
+
+const ops = {
+  files: ["packages/ops/**/*.ts"],
+  ...restrict([
+    SERVICES,
+    UMBRA,
+    DEEP,
+    {
+      group: [
+        "@lumorphia/media",
+        "@lumorphia/media/*",
+        "@lumorphia/storage",
+        "@lumorphia/storage/*",
+      ],
+      message: "ops は運用の土台だけ。画像やストレージを知らない",
+    },
+  ]),
+};
+
+// sentry の入口はサービスの画面 (ブラウザ) からも読まれる。Node API と pino を巻き込まない
+const opsSentry = {
+  files: ["packages/ops/src/sentry.ts"],
+  ...restrict([
+    SERVICES,
+    UMBRA,
+    DEEP,
+    { group: NODE_APIS, message: "sentry はブラウザでも動く。Node API を使わない" },
+    {
+      group: ["pino", "./logger.ts"],
+      message: "sentry はブラウザでも動く。ロガー (pino) を巻き込まない",
+    },
+  ]),
+};
+
 export default tseslint.config(
   { ignores: ["**/node_modules/**", "**/dist/**", "**/build/**", "**/coverage/**"] },
   ...tseslint.configs.recommended,
@@ -60,4 +95,6 @@ export default tseslint.config(
   },
   media,
   storage,
+  ops,
+  opsSentry,
 );
