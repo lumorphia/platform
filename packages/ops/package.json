@@ -1,0 +1,47 @@
+{
+  "name": "@lumorphia/ops",
+  "version": "0.0.0",
+  "description": "運用の土台。ロガー (pino、シークレットを伏せる)、運営への通知 (Discord)、Sentry に送る前の伏せ字",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lumorphia/platform.git",
+    "directory": "packages/ops"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "type": "module",
+  "exports": {
+    "./logger": {
+      "source": "./src/logger.ts",
+      "types": "./dist/logger.d.ts",
+      "default": "./dist/logger.js"
+    },
+    "./notify": {
+      "source": "./src/notify.ts",
+      "types": "./dist/notify.d.ts",
+      "default": "./dist/notify.js"
+    },
+    "./sentry": {
+      "source": "./src/sentry.ts",
+      "types": "./dist/sentry.d.ts",
+      "default": "./dist/sentry.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepack": "cp ../../LICENSE LICENSE",
+    "postpack": "rm -f LICENSE"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ],
+  "dependencies": {
+    "pino": "^10.4.0"
+  }
+}
