@@ -10,20 +10,32 @@ async function restricted(filePath: string, code: string): Promise<boolean> {
 }
 
 describe("eslint boundaries", () => {
-  it.each(["packages/media/src/x.ts", "packages/storage/src/x.ts", "packages/ops/src/x.ts"])(
-    "keeps %s free of the services",
-    async (file) => {
-      expect(await restricted(file, 'import "@prismtone/core";')).toBe(true);
-      expect(await restricted(file, 'import "@scenote/core";')).toBe(true);
-    },
-  );
+  it.each([
+    "packages/media/src/x.ts",
+    "packages/storage/src/x.ts",
+    "packages/ops/src/x.ts",
+    "packages/auth-client/src/x.ts",
+  ])("keeps %s free of the services", async (file) => {
+    expect(await restricted(file, 'import "@prismtone/core";')).toBe(true);
+    expect(await restricted(file, 'import "@scenote/core";')).toBe(true);
+  });
 
-  it.each(["packages/media/src/x.ts", "packages/storage/src/x.ts", "packages/ops/src/x.ts"])(
-    "keeps %s free of the private umbra",
-    async (file) => {
-      expect(await restricted(file, 'import "@lumorphia/moderation";')).toBe(true);
-    },
-  );
+  it.each([
+    "packages/media/src/x.ts",
+    "packages/storage/src/x.ts",
+    "packages/ops/src/x.ts",
+    "packages/auth-client/src/x.ts",
+  ])("keeps %s free of the private umbra", async (file) => {
+    expect(await restricted(file, 'import "@lumorphia/moderation";')).toBe(true);
+  });
+
+  it("keeps auth-client free of media, storage and ops", async () => {
+    for (const pkg of ["media", "storage", "ops"]) {
+      expect(await restricted("packages/auth-client/src/x.ts", `import "@lumorphia/${pkg}";`)).toBe(
+        true,
+      );
+    }
+  });
 
   it("keeps media free of storage", async () => {
     expect(await restricted("packages/media/src/x.ts", 'import "@lumorphia/storage";')).toBe(true);

@@ -1,0 +1,43 @@
+{
+  "name": "@lumorphia/auth-client",
+  "version": "0.0.0",
+  "description": "Lumorphia の OIDC ログイン、claim 検証、ログアウトの共通の受け口",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lumorphia/platform.git",
+    "directory": "packages/auth-client"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepack": "cp ../../LICENSE LICENSE",
+    "postpack": "rm -f LICENSE"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ],
+  "dependencies": {
+    "jose": "6.2.12"
+  },
+  "peerDependencies": {
+    "better-auth": "1.7.7"
+  },
+  "devDependencies": {
+    "better-auth": "1.7.7"
+  }
+}

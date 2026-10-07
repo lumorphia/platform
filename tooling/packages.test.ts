@@ -8,7 +8,7 @@ const read = (path: string) =>
     version: string;
   };
 
-const PACKAGES = ["media", "storage", "ops"] as const;
+const PACKAGES = ["media", "storage", "ops", "auth-client"] as const;
 const manifest = read(".release-please-manifest.json") as unknown as Record<string, string>;
 const config = read("release-please-config.json") as unknown as {
   packages: Record<string, { component?: string }>;
