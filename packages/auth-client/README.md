@@ -4,7 +4,7 @@ Lumorphia accounts を発行元に使うサービスの、OIDC ログイン・cl
 
 ## ログイン
 
-`createLumorphiaOAuthConfig` を Better Auth の `genericOAuth` に渡す。認可コード + PKCE S256、`client_secret_post`、署名検証と nonce の照合を使う。ID トークンが無い応答、検証に必要な discovery が無い発行元、期待した issuer / audience / EdDSA と異なるトークンは受け入れない。claim は設定した issuer の JWKS で検証した ID トークンから読む。
+`createLumorphiaOAuthConfig` を Better Auth の `genericOAuth` に渡す。認可コード + PKCE S256、`client_secret_post`、署名検証と nonce の照合を使う。ID トークンが無い応答、検証に必要な discovery が無い発行元、期待した issuer / audience / EdDSA と異なるトークンは受け入れない。ID トークンを設定した issuer の JWKS で検証したあと、access token を使って同じ issuer の UserInfo から最新の claim を読む。sub が一致しない場合や active でない場合、UserInfo が失敗した場合はローカルの session を作らない。
 
 ```ts
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -89,7 +89,7 @@ export function handleAuth(request: Request) {
 - サービス側で `lumorphiaSub` を `users.lumorphia_sub` (unique) に、セッションの追加項目をそのサービスのテーブルに対応付けてマイグレーションする。`platform` はテーブルを持たない。
 - Better Auth 1.7.7 は `input: false` の項目を OAuth のプロフィール変換から除く。`required: false` にして **サーバーの create hook で設定**する。ブラウザから書ける `input: true` に変えない。DB で必須にする場合も create hook が値を渡す。
 - アカウントの識別子は検証した `sub`。メールの一致による自動連携は無効にする。既存アカウントへの結び付けはサービスが引き継ぎフローで明示する。
-- `onVerifiedLogin` は署名と claim の検証後、ローカルのユーザー・セッション作成より前に呼ぶ。ここでは要求の context に保持し、ログインが成功して session を作るときに保存する。コールバックが失敗した場合はログインも失敗する。
+- `onVerifiedLogin` は署名・最新の UserInfo と claim の検証後、ローカルのユーザー・セッション作成より前に呼ぶ。ここでは要求の context に保持し、ログインが成功して session を作るときに保存する。コールバックが失敗した場合はログインも失敗する。
 - `handle` を表示名に使う。bio、role、ban、利用規約への同意はサービス側で持つ。`legacyPending` はサービスの引き継ぎ導線で使い、`identities` は要求した場合だけ返す。現在 accounts の `legacy_pending` は空配列。
 - ID トークンをログ・画面・ブラウザの session 応答に含めない。`returned: false` を設定し、サーバーの DB から現在のセッションに結び付いた値を読む。秘密を使う設定をブラウザに import しない。
 
@@ -141,3 +141,34 @@ accounts に登録した専用の受信 URI で `Request` を渡し、返った 
 ## 検証
 
 `pnpm --filter @lumorphia/auth-client test` で claim、Logout Token、HTTP の受け口、実際の Better Auth の `generic-oauth` / memory adapter による認可要求・コード交換・session 作成を確かめる。テストの発行元 HTTP 応答だけを差し替え、JWT は Ed25519 で生成して JWKS で検証する。accounts の PostgreSQL・ブラウザ E2E とのサービス接続は、利用側への組み込みで確認する。
+
+## 退会・復旧・物理削除の通知
+
+```ts
+import { createAccountEventHandler, createAccountEventVerifier } from "@lumorphia/auth-client";
+
+const handleAccountEvent = createAccountEventHandler({
+  verify: createAccountEventVerifier({ issuer, clientId, service: "scenote" }),
+  adapter: {
+    async applyOnce(event) {
+      // サービス自身の DB トランザクションで実装する。
+      // (issuer, service, sub) の最終 revision と eventId を記録する。
+      // 古い revision と重複は成功として戻し、状態を再適用しない。
+      // 状態変更、セッション失効、画像削除の投入と記録を原子的に行う。
+      // 失敗したらすべて rollback する。
+    },
+  },
+});
+```
+
+accounts のクライアント設定 `lifecycleUri` に登録した受信先で `Request` を渡し、返った `Response` を返す。既定のパスは `/api/lumorphia/account-events`。サーバー間の専用 POST なので Cookie と Origin を要求しない。アダプターのコメントを実際の DB 操作に置き換える。
+
+- 固定された issuer / JWKS、EdDSA、client audience、`typ: lumorphia-account-event+jwt`、最大 120 秒の有効期間、nonce が無いことを検証する。時計の許容差は 5 秒。
+- `eventId` と `revision` は再送でも変わらず、署名時刻だけ更新される。JWT の短い有効期間とは別に、サービス内の sub ごとの最終 revision を永続化する。クライアントの更新で audience が複数あっても、同じサービスの状態を重複適用しない。
+- `state` は `active` / `deleted` / `purged`、`scope` は `account` / `service`。`deleted` は `deletedAt` とその 30 日後の `recoverUntil` を持つ。ほかの状態では両方 null。`occurredAt` は再送時も元の発生日時。
+- `deleted` は非表示化、全 RP セッションの失効、画像の削除要求を投入する。`active` は復旧可能な文字情報と連携を戻すが、削除要求済みの画像は戻さない。`purged` は旧データの物理削除を受け持つ。非同期の画像削除などは RP 自身の永続的なジョブに投入し、投入と状態変更を同じトランザクションで確定する。
+- 送信側は同じ audience で revision の順に送る。期限切れ後の再利用は `purged` のあとに `active` が来る。古い revision が現在の状態を戻さないようにし、独立したサービス退会を全体復旧で取り消さない。RP の ban、role、規約同意は通知で上書きしない。
+- RP のログイン hook は自分の退会期限も検査する。期限切れの旧データは先に削除し、新たな利用を始める。通知の到着や worker だけを待って復旧しない。UserInfo の検査は Lumorphia の最新の active 状態を確認するもので、RP のローカル状態処理を代行しない。
+- 受付と重複は 204、無効なフォーム・トークンは 400、非 POST は 405、不正な Content-Type は 415、16 KiB を超える本文は 413、DB アダプターの失敗は 500。accounts は 2xx を確認してから配送済みとし、それ以外は再送する。応答とログにトークンや内部エラーを出さない。
+
+Prismtone / Scenote への実際の DB アダプターの接続は A2 / A3 で行う。設計は [ADR-0006](../../docs/adr/0006-account-event-delivery.md)。

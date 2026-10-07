@@ -27,7 +27,13 @@ afterEach(() => vi.unstubAllGlobals());
 
 async function setup(
   overrides: Record<string, unknown> = {},
-  options: { missingJwks?: boolean; missingToken?: boolean; secondLogin?: boolean } = {},
+  options: {
+    missingJwks?: boolean;
+    missingToken?: boolean;
+    secondLogin?: boolean;
+    userinfoStatus?: number;
+    userinfoSubject?: string;
+  } = {},
 ) {
   const jwk = { ...(await exportJWK(keys.publicKey)), kid: "test-key", alg: "EdDSA" };
   const context = new AsyncLocalStorage<{ login?: VerifiedLogin }>();
@@ -63,6 +69,13 @@ async function setup(
         id_token_signing_alg_values_supported: ["EdDSA"],
         ...(!options.missingJwks ? { jwks_uri: `${issuer}/jwks` } : {}),
       });
+    if (url === `${issuer}/oauth2/userinfo`) {
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-access-token");
+      return Response.json(
+        { ...profile, sub: options.userinfoSubject ?? profile.sub },
+        { status: options.userinfoStatus ?? 200 },
+      );
+    }
     if (url === `${issuer}/jwks`) return Response.json({ keys: [jwk] });
     if (url === `${issuer}/oauth2/token`) {
       const form = new URLSearchParams(String(init?.body));
@@ -224,6 +237,18 @@ describe("Better Auth generic-oauth integration", () => {
     const { database, onVerifiedLogin } = await setup(overrides);
     expect(database.session).toHaveLength(0);
     expect(onVerifiedLogin).not.toHaveBeenCalled();
+  });
+  it.each([401, 403, 503])(
+    "rejects a login when the issuer's current account check returns %s",
+    async (userinfoStatus) => {
+      const { database, onVerifiedLogin } = await setup({}, { userinfoStatus });
+      expect(database.session).toHaveLength(0);
+      expect(onVerifiedLogin).not.toHaveBeenCalled();
+    },
+  );
+  it("rejects a current account response for a different subject", async () => {
+    const { database } = await setup({}, { userinfoSubject: "test-other-sub" });
+    expect(database.session).toHaveLength(0);
   });
   it("fails closed when discovery has no verification keys", async () => {
     const { start, database } = await setup({}, { missingJwks: true });
