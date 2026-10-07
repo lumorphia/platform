@@ -50,19 +50,34 @@ export function createLumorphiaOAuthConfig(
         algorithms: ["EdDSA"],
         requiredClaims: ["iss", "aud", "sub", "iat", "exp", "sid"],
       });
-      const claims = parseLumorphiaClaims(payload, options);
-      const sid = claimString(payload.sid);
-      const email = claimString(payload.email);
+      const issuedClaims = parseLumorphiaClaims(payload, options);
+      claimString(payload.email);
       if (typeof payload.email_verified !== "boolean")
+        throw new Error("Invalid email_verified claim");
+      if (!tokens.accessToken) return null;
+      // 通知がまだ届いていない場合にも、ログインのたび発行元の現在の状態を確かめる。
+      const response = await fetch(`${issuer}/oauth2/userinfo`, {
+        headers: { authorization: `Bearer ${tokens.accessToken}` },
+        redirect: "error",
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error("Lumorphia account is unavailable");
+      const current = (await response.json()) as Record<string, unknown>;
+      const claims = parseLumorphiaClaims(current, options);
+      if (claims.sub !== issuedClaims.sub) throw new Error("Lumorphia account subject mismatch");
+      const sid = claimString(payload.sid);
+      const email = claimString(current.email);
+      if (typeof current.email_verified !== "boolean")
         throw new Error("Invalid email_verified claim");
       await options.onVerifiedLogin?.({ issuer, clientId, sid, claims, idToken: tokens.idToken });
       return {
         ...payload,
+        ...current,
         sub: claims.sub,
         name: claims.handle,
         email,
-        emailVerified: payload.email_verified,
-        ...(typeof payload.picture === "string" ? { image: payload.picture } : {}),
+        emailVerified: current.email_verified,
+        ...(typeof current.picture === "string" ? { image: current.picture } : {}),
       };
     },
     mapProfileToUser(profile) {

@@ -8,3 +8,10 @@ export {
   createBackchannelLogoutHandler,
 } from "./logout.ts";
 export type { LogoutEvent, LogoutAdapter, LogoutTokenVerifier } from "./logout.ts";
+export { createAccountEventVerifier, createAccountEventHandler } from "./account-events.ts";
+export type {
+  AccountEvent,
+  AccountEventAdapter,
+  AccountEventVerifier,
+  LumorphiaService,
+} from "./account-events.ts";
