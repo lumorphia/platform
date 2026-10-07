@@ -9,6 +9,7 @@ lumorphia/platform: Lumorphia のサービス (Prismtone、Scenote、今後の F
 packages/media    @lumorphia/media    画像の検証、メタデータの除去、派生画像とアイコン (sharp)
 packages/storage  @lumorphia/storage  オブジェクトストレージの境界と実装 (S3 互換、ファイル、メモリ)、署名付き URL
 packages/ops      @lumorphia/ops      運用の土台。入口は logger (pino、Node 専用)、notify (Discord)、sentry (伏せ字、ブラウザでも動く)
+packages/auth-client @lumorphia/auth-client OIDC のログイン・claim・ログアウト。DB はサービスのアダプターで受ける
 tooling/          リポジトリ全体の決まりのテスト (依存の向き、公開する package.json)
 docs/adr/         設計判断
 ```
@@ -23,6 +24,7 @@ docs/adr/         設計判断
 - `ops` は画像もストレージも知らない。`ops/sentry` はブラウザでも動くので、Node API と pino を使わない
 - ほかのパッケージは `package.json` の exports から使う (`/src/` や `/dist/` を直接指さない)
 - **パッケージはサービスの DB のテーブルを持たない**。関数とアダプターと型を出す
+- `auth-client` は認証の境界だけ。画像・ストレージ・運用の実装に依存しない
 - キーの付け方 (`tmp/`、`posts/` など) はサービスが決める。`storage` は知らない
 
 ## 入れてよいデータ (public リポジトリ)

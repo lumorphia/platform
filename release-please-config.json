@@ -58,6 +58,10 @@
     "packages/ops": {
       "component": "ops",
       "package-name": "@lumorphia/ops"
+    },
+    "packages/auth-client": {
+      "component": "auth-client",
+      "package-name": "@lumorphia/auth-client"
     }
   }
 }

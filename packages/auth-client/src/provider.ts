@@ -1,0 +1,73 @@
+import type { GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+import { claimString, parseLumorphiaClaims } from "./claims.ts";
+import type { LumorphiaClaims } from "./claims.ts";
+import { normalizeIssuer } from "./urls.ts";
+
+export interface VerifiedLogin {
+  readonly issuer: string;
+  readonly clientId: string;
+  readonly sid: string;
+  readonly claims: LumorphiaClaims;
+  readonly idToken: string;
+}
+
+export interface LumorphiaOAuthOptions {
+  readonly issuer: string;
+  readonly clientId: string;
+  readonly clientSecret: string;
+  readonly identities?: boolean;
+  /** 現在のログイン要求の文脈に保存し、その要求で作った RP セッションに結び付ける。 */
+  readonly onVerifiedLogin?: (login: VerifiedLogin) => void | Promise<void>;
+}
+
+export function createLumorphiaOAuthConfig(
+  options: LumorphiaOAuthOptions,
+): GenericOAuthConfig<"lumorphia"> {
+  const issuer = normalizeIssuer(options.issuer);
+  const clientId = claimString(options.clientId);
+  const clientSecret = claimString(options.clientSecret);
+  const jwks = createRemoteJWKSet(new URL(`${issuer}/jwks`));
+  return {
+    providerId: "lumorphia",
+    discoveryUrl: `${issuer}/.well-known/openid-configuration`,
+    clientId,
+    clientSecret,
+    scopes: ["openid", "profile", "email", ...(options.identities ? ["lumorphia:identities"] : [])],
+    pkce: true,
+    requireIdTokenVerification: true,
+    tokenEndpointAuth: { method: "client_secret_post" },
+    // Better Auth の account 行の最新の ID トークンは別端末のものになり得る。
+    // 現在の RP セッションに保存した hint を createLogoutUrl で使う。
+    disableProviderLogout: true,
+    accountSubject: ({ profile }) => parseLumorphiaClaims(profile, options).sub,
+    async getUserInfo(tokens) {
+      if (!tokens.idToken) return null;
+      // Better Auth が state / nonce を検証した後、設定した issuer と署名方式も固定して検証する。
+      const { payload } = await jwtVerify(tokens.idToken, jwks, {
+        issuer,
+        audience: clientId,
+        algorithms: ["EdDSA"],
+        requiredClaims: ["iss", "aud", "sub", "iat", "exp", "sid"],
+      });
+      const claims = parseLumorphiaClaims(payload, options);
+      const sid = claimString(payload.sid);
+      const email = claimString(payload.email);
+      if (typeof payload.email_verified !== "boolean")
+        throw new Error("Invalid email_verified claim");
+      await options.onVerifiedLogin?.({ issuer, clientId, sid, claims, idToken: tokens.idToken });
+      return {
+        ...payload,
+        sub: claims.sub,
+        name: claims.handle,
+        email,
+        emailVerified: payload.email_verified,
+        ...(typeof payload.picture === "string" ? { image: payload.picture } : {}),
+      };
+    },
+    mapProfileToUser(profile) {
+      const claims = parseLumorphiaClaims(profile, options);
+      return { name: claims.handle };
+    },
+  };
+}

@@ -1,5 +1,6 @@
 {
   "packages/media": "0.0.0",
   "packages/storage": "0.0.0",
-  "packages/ops": "0.0.0"
+  "packages/ops": "0.0.0",
+  "packages/auth-client": "0.0.0"
 }
