@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/lumorphia/platform/compare/auth-client-v1.0.0...auth-client-v1.1.0) (2026-10-08)
+
+
+### Features
+
+* auth-client で表示名とアイコンを UserInfo から渡す ([e8bb352](https://github.com/lumorphia/platform/commit/e8bb352939caf2424c692482524b5135fad2a9e0))
+
 ## 1.0.0 (2026-10-08)
 
 
