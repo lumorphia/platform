@@ -9,6 +9,7 @@ lumorphia/platform: Lumorphia のサービス (Prismtone、Scenote、今後の F
 packages/media    @lumorphia/media    画像の検証、メタデータの除去、派生画像とアイコン (sharp)
 packages/storage  @lumorphia/storage  オブジェクトストレージの境界と実装 (S3 互換、ファイル、メモリ)、署名付き URL
 packages/ops      @lumorphia/ops      運用の土台。入口は logger (pino、Node 専用)、notify (Discord)、sentry (伏せ字、ブラウザでも動く)
+packages/auth-client @lumorphia/auth-client OIDC のログイン・claim・ログアウト。DB はサービスのアダプターで受ける
 tooling/          リポジトリ全体の決まりのテスト (依存の向き、公開する package.json)
 docs/adr/         設計判断
 ```
@@ -23,6 +24,7 @@ docs/adr/         設計判断
 - `ops` は画像もストレージも知らない。`ops/sentry` はブラウザでも動くので、Node API と pino を使わない
 - ほかのパッケージは `package.json` の exports から使う (`/src/` や `/dist/` を直接指さない)
 - **パッケージはサービスの DB のテーブルを持たない**。関数とアダプターと型を出す
+- `auth-client` は認証の境界だけ。画像・ストレージ・運用の実装に依存しない
 - キーの付け方 (`tmp/`、`posts/` など) はサービスが決める。`storage` は知らない
 
 ## 入れてよいデータ (public リポジトリ)
@@ -48,6 +50,8 @@ docs/adr/         設計判断
 - 最初のリリースは 1.0.0 から始まる (`initial-version` を付けていない。manifest の 0.0.0 は前のリリースとみなされない)
 - 版の上げ方は Conventional Commits から決まる (`feat:` で minor、`fix:` / `refactor:` / `perf:` で patch、`feat!:` や `BREAKING CHANGE:` で major)。サービスは自分の都合で上げるので、破壊的な変更は必ず major にする
 - 同じ版は出し直せない。公開の設定は `tooling/packages.test.ts` が確かめる
+- リリース PR は `main` だけで版を上げる (`.release-please-manifest.json`、各パッケージの `package.json` と `CHANGELOG.md`)。`develop` には戻らないので、`develop` の版は 0.0.0 のまま (`tooling/packages.test.ts` は package.json と manifest の一致だけを見る)
+- **パッケージを足すと、`develop` → `main` で manifest がコンフリクトする** (`main` で版を上げた行と、`develop` で足した行が隣り合う)。`develop` は履歴を一直線に保つ ruleset があり `main` を取り込めないので、`main` から `release/<topic>` を切って `develop` をマージし、`main` の版を残して足したパッケージを `0.0.0` で加え、`main` へ PR にする (マージコミット)
 
 ## テストの書き方
 

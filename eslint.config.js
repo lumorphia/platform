@@ -93,6 +93,25 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ["packages/auth-client/**/*.ts"],
+    ...restrict([
+      SERVICES,
+      UMBRA,
+      DEEP,
+      {
+        group: [
+          "@lumorphia/media",
+          "@lumorphia/media/*",
+          "@lumorphia/storage",
+          "@lumorphia/storage/*",
+          "@lumorphia/ops",
+          "@lumorphia/ops/*",
+        ],
+        message: "auth-client は認証の境界だけ。画像・ストレージ・運用の実装を知らない",
+      },
+    ]),
+  },
   media,
   storage,
   ops,
