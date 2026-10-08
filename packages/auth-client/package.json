@@ -1,6 +1,6 @@
 {
   "name": "@lumorphia/auth-client",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Lumorphia の OIDC ログイン、claim 検証、ログアウトの共通の受け口",
   "license": "AGPL-3.0-only",
   "repository": {
