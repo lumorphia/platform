@@ -90,10 +90,10 @@ export function handleAuth(request: Request) {
 - Better Auth 1.7.7 は `input: false` の項目を OAuth のプロフィール変換から除く。`required: false` にして **サーバーの create hook で設定**する。ブラウザから書ける `input: true` に変えない。DB で必須にする場合も create hook が値を渡す。
 - アカウントの識別子は検証した `sub`。メールの一致による自動連携は無効にする。既存アカウントへの結び付けはサービスが引き継ぎフローで明示する。
 - `onVerifiedLogin` は署名・最新の UserInfo と claim の検証後、ローカルのユーザー・セッション作成より前に呼ぶ。ここでは要求の context に保持し、ログインが成功して session を作るときに保存する。コールバックが失敗した場合はログインも失敗する。
-- `handle` を表示名に使う。bio、role、ban、利用規約への同意はサービス側で持つ。`legacyPending` はサービスの引き継ぎ導線で使い、`identities` は要求した場合だけ返す。現在 accounts の `legacy_pending` は空配列。
+- 表示名とアイコンは UserInfo の `name` と `picture` から読み、`login.profile` (`name`、`picture`。アイコンが無ければ `null`) で渡す。Better Auth の利用者の `name` と `image` にも入るが、アイコンを消した人の `image` は Better Auth が書き換えないので、写しは必ず `login.profile` から書く。Lumorphia が正なので、サービスはログインのたびに写しを書き換える ([ADR-0007](../../docs/adr/0007-profile-from-userinfo.md))。`picture` は https の URL だけを受け入れる。bio、role、ban、利用規約への同意はサービス側で持つ。`legacyPending` はサービスの引き継ぎ導線で使い、`identities` は要求した場合だけ返す。現在 accounts の `legacy_pending` は空配列。
 - ID トークンをログ・画面・ブラウザの session 応答に含めない。`returned: false` を設定し、サーバーの DB から現在のセッションに結び付いた値を読む。秘密を使う設定をブラウザに import しない。
 
-`parseLumorphiaClaims(profile, { identities: true })` は **型・形の検証だけ**を行う。未検証の JWT を decode した値を渡して信頼しない。戻り値は `sub` / `handle` / `legacyPending` / 任意の `identities`。元の配列を変更しない。
+`parseLumorphiaClaims(profile, { identities: true })` は **型・形の検証だけ**を行う。未検証の JWT を decode した値を渡して信頼しない。戻り値は `sub` / `handle` / `legacyPending` / 任意の `identities`。元の配列を変更しない。 `parseLumorphiaProfile(userinfo)` は `name` / `picture` の形を検証する。
 
 ## サービスからログアウト
 

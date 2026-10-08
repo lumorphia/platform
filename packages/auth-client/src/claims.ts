@@ -10,6 +10,13 @@ export interface LumorphiaClaims {
   readonly identities?: readonly LumorphiaIdentity[];
 }
 
+/** Lumorphia を正とする表示名とアイコン。サービスはこれを写して表示する (prismtone ADR-0052)。 */
+export interface LumorphiaProfile {
+  readonly name: string;
+  /** accounts に置いたアイコンの https の URL。未設定なら null */
+  readonly picture: string | null;
+}
+
 export function claimRecord(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("Invalid Lumorphia claims");
@@ -47,4 +54,15 @@ export function parseLumorphiaClaims(
       return { provider: claimString(identity.provider), id: claimString(identity.id) };
     }),
   };
+}
+
+/** UserInfo の標準の name・picture を検証する。picture はそのまま img に入るので https の URL に限る。 */
+export function parseLumorphiaProfile(profile: unknown): LumorphiaProfile {
+  const raw = claimRecord(profile);
+  const name = claimString(raw.name);
+  if (raw.picture === undefined || raw.picture === null) return { name, picture: null };
+  const picture = claimString(raw.picture);
+  if (!URL.canParse(picture) || new URL(picture).protocol !== "https:")
+    throw new Error("Invalid picture claim");
+  return { name, picture };
 }
