@@ -11,4 +11,6 @@
 
 | [0006](0006-account-event-delivery.md) | アカウント状態の署名検証とサービスの永続的な適用を分ける |
 
+| [0007](0007-profile-from-userinfo.md) | 表示名とアイコンを UserInfo から渡し、handle を表示名に使わない |
+
 本文中の「prismtone ADR-NNNN」は lumorphia/prismtone の ADR を指す。

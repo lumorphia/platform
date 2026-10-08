@@ -19,6 +19,11 @@ const profile = {
   "https://lumorphia.com/handle": "test_handle",
   "https://lumorphia.com/legacy_pending": [],
 };
+// 表示名とアイコンは UserInfo からだけ読む
+const currentProfile = {
+  name: "Test Name",
+  picture: "https://accounts.lumorphia.test/api/media/avatars/test.webp",
+};
 let keys: Awaited<ReturnType<typeof generateKeyPair>>;
 beforeAll(async () => {
   keys = await generateKeyPair("EdDSA");
@@ -33,6 +38,7 @@ async function setup(
     secondLogin?: boolean;
     userinfoStatus?: number;
     userinfoSubject?: string;
+    userinfo?: Record<string, unknown>;
   } = {},
 ) {
   const jwk = { ...(await exportJWK(keys.publicKey)), kid: "test-key", alg: "EdDSA" };
@@ -72,7 +78,12 @@ async function setup(
     if (url === `${issuer}/oauth2/userinfo`) {
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-access-token");
       return Response.json(
-        { ...profile, sub: options.userinfoSubject ?? profile.sub },
+        {
+          ...profile,
+          ...currentProfile,
+          ...options.userinfo,
+          sub: options.userinfoSubject ?? profile.sub,
+        },
         { status: options.userinfoStatus ?? 200 },
       );
     }
@@ -189,11 +200,11 @@ describe("createLumorphiaOAuthConfig", () => {
       createLumorphiaOAuthConfig({ issuer, clientId, clientSecret, identities: true }).scopes,
     ).toContain("lumorphia:identities");
   });
-  it("maps the handle without overriding the local user id", async () => {
+  it("maps the display name without overriding the local user id", async () => {
     const config = createLumorphiaOAuthConfig({ issuer, clientId, clientSecret });
-    expect(await config.mapProfileToUser!({ ...profile, emailVerified: true })).toEqual({
-      name: "test_handle",
-    });
+    expect(
+      await config.mapProfileToUser!({ ...profile, ...currentProfile, emailVerified: true }),
+    ).toEqual({ name: "Test Name" });
   });
   it("rejects missing client credentials", () => {
     expect(() => createLumorphiaOAuthConfig({ issuer, clientId, clientSecret: "" })).toThrow();
@@ -211,7 +222,11 @@ describe("Better Auth generic-oauth integration", () => {
       lumorphiaSid: "test-sid",
       lumorphiaIdToken: expect.any(String),
     });
-    expect(database.user?.[0]).toMatchObject({ lumorphiaSub: "test-sub", name: "test_handle" });
+    expect(database.user?.[0]).toMatchObject({
+      lumorphiaSub: "test-sub",
+      name: "Test Name",
+      image: currentProfile.picture,
+    });
     expect(database.account?.[0]).toMatchObject({ providerId: "lumorphia", accountId: "test-sub" });
     expect(onVerifiedLogin).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -219,9 +234,19 @@ describe("Better Auth generic-oauth integration", () => {
         clientId,
         sid: "test-sid",
         claims: expect.objectContaining({ sub: "test-sub" }),
+        profile: currentProfile,
         idToken: expect.any(String),
       }),
     );
+  });
+  it.each([
+    { name: undefined },
+    { picture: "http://accounts.lumorphia.test/avatar.webp" },
+    { picture: "javascript:alert(1)" },
+  ])("rejects a current profile %j before session creation", async (userinfo) => {
+    const { database, onVerifiedLogin } = await setup({}, { userinfo });
+    expect(database.session).toHaveLength(0);
+    expect(onVerifiedLogin).not.toHaveBeenCalled();
   });
   it.each([
     { nonce: "test-wrong-nonce" },

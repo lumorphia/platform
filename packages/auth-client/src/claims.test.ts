@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseLumorphiaClaims } from "./claims.ts";
+import { parseLumorphiaClaims, parseLumorphiaProfile } from "./claims.ts";
 
 const profile = {
   sub: "test-sub",
@@ -58,5 +58,32 @@ describe("parseLumorphiaClaims", () => {
     expect(parseLumorphiaClaims(profile).legacyPending).not.toBe(
       profile["https://lumorphia.com/legacy_pending"],
     );
+  });
+});
+
+describe("parseLumorphiaProfile", () => {
+  const picture = "https://accounts.lumorphia.test/api/media/avatars/test.webp";
+  it("reads the display name and picture", () => {
+    expect(parseLumorphiaProfile({ name: "Test Name", picture })).toEqual({
+      name: "Test Name",
+      picture,
+    });
+  });
+  it("treats a missing picture as no icon", () => {
+    expect(parseLumorphiaProfile({ name: "Test Name" })).toEqual({
+      name: "Test Name",
+      picture: null,
+    });
+  });
+  it.each([
+    {},
+    { name: "" },
+    { name: 1 },
+    { name: "Test Name", picture: "" },
+    { name: "Test Name", picture: "http://accounts.lumorphia.test/avatar.webp" },
+    { name: "Test Name", picture: "javascript:alert(1)" },
+    { name: "Test Name", picture: "not a url" },
+  ])("rejects a malformed profile %j", (value) => {
+    expect(() => parseLumorphiaProfile(value)).toThrow();
   });
 });
