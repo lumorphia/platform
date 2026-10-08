@@ -1,5 +1,5 @@
-export { parseLumorphiaClaims } from "./claims.ts";
-export type { LumorphiaClaims, LumorphiaIdentity } from "./claims.ts";
+export { parseLumorphiaClaims, parseLumorphiaProfile } from "./claims.ts";
+export type { LumorphiaClaims, LumorphiaIdentity, LumorphiaProfile } from "./claims.ts";
 export { createLumorphiaOAuthConfig } from "./provider.ts";
 export type { LumorphiaOAuthOptions, VerifiedLogin } from "./provider.ts";
 export {

@@ -1,7 +1,7 @@
 import type { GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { claimString, parseLumorphiaClaims } from "./claims.ts";
-import type { LumorphiaClaims } from "./claims.ts";
+import { claimString, parseLumorphiaClaims, parseLumorphiaProfile } from "./claims.ts";
+import type { LumorphiaClaims, LumorphiaProfile } from "./claims.ts";
 import { normalizeIssuer } from "./urls.ts";
 
 export interface VerifiedLogin {
@@ -9,6 +9,8 @@ export interface VerifiedLogin {
   readonly clientId: string;
   readonly sid: string;
   readonly claims: LumorphiaClaims;
+  /** ログインのときの最新の表示名とアイコン (UserInfo) */
+  readonly profile: LumorphiaProfile;
   readonly idToken: string;
 }
 
@@ -65,24 +67,32 @@ export function createLumorphiaOAuthConfig(
       const current = (await response.json()) as Record<string, unknown>;
       const claims = parseLumorphiaClaims(current, options);
       if (claims.sub !== issuedClaims.sub) throw new Error("Lumorphia account subject mismatch");
+      const profile = parseLumorphiaProfile(current);
       const sid = claimString(payload.sid);
       const email = claimString(current.email);
       if (typeof current.email_verified !== "boolean")
         throw new Error("Invalid email_verified claim");
-      await options.onVerifiedLogin?.({ issuer, clientId, sid, claims, idToken: tokens.idToken });
+      await options.onVerifiedLogin?.({
+        issuer,
+        clientId,
+        sid,
+        claims,
+        profile,
+        idToken: tokens.idToken,
+      });
       return {
         ...payload,
         ...current,
         sub: claims.sub,
-        name: claims.handle,
+        name: profile.name,
         email,
         emailVerified: current.email_verified,
-        ...(typeof current.picture === "string" ? { image: current.picture } : {}),
+        ...(profile.picture ? { image: profile.picture } : {}),
       };
     },
     mapProfileToUser(profile) {
-      const claims = parseLumorphiaClaims(profile, options);
-      return { name: claims.handle };
+      parseLumorphiaClaims(profile, options);
+      return { name: parseLumorphiaProfile(profile).name };
     },
   };
 }
