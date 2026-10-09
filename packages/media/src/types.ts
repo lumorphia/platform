@@ -4,6 +4,8 @@ export type ImageVariants = {
   height: number;
   display: Uint8Array;
   thumb: Uint8Array;
+  /** 一覧のカード用。横幅で揃える。SharpImageProcessor に cardWidth を渡したときだけ作る */
+  card?: Uint8Array;
   blurhash: string;
 };
 

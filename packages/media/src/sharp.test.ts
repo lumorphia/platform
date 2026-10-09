@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { SharpImageProcessor, sniffImage } from "./sharp.ts";
+import { createCardVariant, SharpImageProcessor, sniffImage } from "./sharp.ts";
 import { DISPLAY_MAX_EDGE, MAX_INPUT_EDGE, THUMB_MAX_EDGE } from "./types.ts";
 
 // テストの画像は全部ここで作る。リポジトリに画像を置かない (docs/adr/0002)
@@ -134,5 +134,63 @@ describe("SharpImageProcessor", () => {
     expect([out.width, out.height]).toEqual([3000, 1500]);
     const thumb = await sharp(out.thumb).metadata();
     expect([thumb.width, thumb.height]).toEqual([400, 200]);
+  });
+});
+
+describe("SharpImageProcessor card variant", () => {
+  const withCard = new SharpImageProcessor({ cardWidth: 960 });
+
+  it("does not make a card unless the service asks for one", async () => {
+    const out = await new SharpImageProcessor().process(await png(1200, 800), "image/png");
+    expect(out.card).toBeUndefined();
+  });
+
+  it("makes a WebP card at the requested width, keeping the aspect ratio", async () => {
+    const out = await withCard.process(await png(1500, 2000), "image/png");
+    const card = await sharp(out.card).metadata();
+    expect([card.format, card.width, card.height]).toEqual(["webp", 960, 1280]);
+  });
+
+  it("does not enlarge an image narrower than the card width", async () => {
+    const out = await withCard.process(await png(300, 200), "image/png");
+    const card = await sharp(out.card).metadata();
+    expect([card.width, card.height]).toEqual([300, 200]);
+  });
+
+  it("keeps a very tall card within the display edge", async () => {
+    const out = await withCard.process(await png(1000, 8000), "image/png");
+    const card = await sharp(out.card).metadata();
+    expect([card.width, card.height]).toEqual([DISPLAY_MAX_EDGE / 8, DISPLAY_MAX_EDGE]);
+  });
+
+  it("drops EXIF from the card", async () => {
+    const withExif = new Uint8Array(
+      await solid(1200, 600)
+        .jpeg()
+        .withExif({ IFD0: { Artist: "someone" } })
+        .toBuffer(),
+    );
+    const out = await withCard.process(withExif, "image/jpeg");
+    expect((await sharp(out.card).metadata()).exif).toBeUndefined();
+  });
+});
+
+describe("createCardVariant", () => {
+  it("shrinks an existing display image to the card width", async () => {
+    const card = await createCardVariant(await webp(2048, 1536), 960);
+    const meta = await sharp(card).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(["webp", 960, 720]);
+  });
+
+  it("does not enlarge a display image narrower than the card width", async () => {
+    const card = await createCardVariant(await webp(400, 600), 960);
+    const meta = await sharp(card).metadata();
+    expect([meta.width, meta.height]).toEqual([400, 600]);
+  });
+
+  it("rejects bytes that do not decode", async () => {
+    await expect(
+      createCardVariant(new TextEncoder().encode("not an image"), 960),
+    ).rejects.toMatchObject({ reason: "decode_failed" });
   });
 });
