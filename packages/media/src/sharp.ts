@@ -49,7 +49,32 @@ export type SharpImageProcessorOptions = {
   displayMaxEdge?: number;
   /** サムネイルの長辺 (px)。既定 THUMB_MAX_EDGE */
   thumbMaxEdge?: number;
+  /**
+   * カード用の横幅 (px)。指定したときだけ card を作る。一覧は横幅で並べるので長辺ではなく横幅で揃え、
+   * 縦に長い画像でも display の長辺は超えない
+   */
+  cardWidth?: number;
 };
+
+const cardResize = (width: number, maxEdge: number) =>
+  ({ width, height: maxEdge, fit: "inside", withoutEnlargement: true }) as const;
+
+/**
+ * 保存済みの display からカード用の画像を作る (cardWidth を使う前に作った画像の作り直し用)。
+ * display はメタデータを落とし終えているので、ここでは縮めて WebP にするだけ
+ */
+export async function createCardVariant(bytes: Uint8Array, width: number): Promise<Uint8Array> {
+  try {
+    return new Uint8Array(
+      await sharp(bytes, { limitInputPixels: MAX_INPUT_PIXELS, failOn: "error" })
+        .resize(cardResize(width, DISPLAY_MAX_EDGE))
+        .webp({ quality: 80 })
+        .toBuffer(),
+    );
+  } catch {
+    throw new ImageRejectedError("decode_failed");
+  }
+}
 
 /**
  * Sharp による実装。EXIF の向きを焼き込み、メタデータは ICC 以外を落とし、sRGB に統一する。
@@ -59,10 +84,12 @@ export type SharpImageProcessorOptions = {
 export class SharpImageProcessor implements ImageProcessor {
   private readonly displayMaxEdge: number;
   private readonly thumbMaxEdge: number;
+  private readonly cardWidth: number | undefined;
 
   constructor(options: SharpImageProcessorOptions = {}) {
     this.displayMaxEdge = options.displayMaxEdge ?? DISPLAY_MAX_EDGE;
     this.thumbMaxEdge = options.thumbMaxEdge ?? THUMB_MAX_EDGE;
+    this.cardWidth = options.cardWidth;
   }
 
   sniff(bytes: Uint8Array): ImageFormat | null {
@@ -114,6 +141,14 @@ export class SharpImageProcessor implements ImageProcessor {
         .webp({ quality: 80 })
         .toBuffer();
 
+      const card =
+        this.cardWidth === undefined
+          ? undefined
+          : await base()
+              .resize(cardResize(this.cardWidth, this.displayMaxEdge))
+              .webp({ quality: 80 })
+              .toBuffer();
+
       const { data: raw, info: rawInfo } = await sharp(thumb)
         .ensureAlpha()
         .raw()
@@ -126,7 +161,14 @@ export class SharpImageProcessor implements ImageProcessor {
         3,
       );
 
-      return { width: info.width, height: info.height, display, thumb, blurhash };
+      return {
+        width: info.width,
+        height: info.height,
+        display,
+        thumb,
+        ...(card ? { card } : {}),
+        blurhash,
+      };
     } catch (e) {
       if (e instanceof ImageRejectedError) throw e;
       throw new ImageRejectedError("decode_failed");

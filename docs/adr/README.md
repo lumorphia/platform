@@ -15,4 +15,6 @@
 
 | [0008](0008-legal-package.md) | 規約の本文と同意の版の比較を @lumorphia/legal にまとめる |
 
+| [0009](0009-shared-dev-tooling.md) | 開発の道具は Renovate の共通の設定と CI の再利用ワークフローだけを共通にする |
+
 本文中の「prismtone ADR-NNNN」は lumorphia/prismtone の ADR を指す。
