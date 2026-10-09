@@ -1,0 +1,63 @@
+name: release
+
+# パッケージごとに版を付けて GitHub Packages に公開するリポジトリ (platform、umbra) が、main への push で呼ぶ (ADR-0009)。
+# main に積まれた Conventional Commits から release-please がパッケージごとのリリース PR (版と CHANGELOG.md) を
+# 開き直す。そのリリース PR をマージした push で、版が上がったパッケージだけを公開する。
+# 呼び出し側の例:
+#   release:
+#     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+#     permissions: { contents: write, pull-requests: write, packages: write }
+#     uses: lumorphia/platform/.github/workflows/release.yml@<main の commit> # main
+#     secrets: inherit
+on:
+  workflow_call:
+    secrets:
+      RELEASE_PLEASE_TOKEN:
+        description: "リリース PR で CI を回したいときの PAT。無ければ GITHUB_TOKEN"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      packages: write
+    steps:
+      # GITHUB_TOKEN が開いた PR では ci が走らない (Actions の再帰防止)。リリース PR は版と CHANGELOG だけなので
+      # 検査は要らないが、required check にするなら RELEASE_PLEASE_TOKEN (PAT) を secrets に入れる
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+      - if: steps.release.outputs.releases_created == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: steps.release.outputs.releases_created == 'true'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - if: steps.release.outputs.releases_created == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: "@lumorphia"
+      - if: steps.release.outputs.releases_created == 'true'
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - if: steps.release.outputs.releases_created == 'true'
+        run: pnpm build:packages
+      # paths_released は今回リリースしたパッケージのパスの JSON 配列 (例: ["packages/media"])。
+      # release-please-action の src/index.ts (outputReleases) が出す
+      - if: steps.release.outputs.releases_created == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PATHS_RELEASED: ${{ steps.release.outputs.paths_released }}
+        run: |
+          set -euo pipefail
+          for path in $(jq -r '.[]' <<<"$PATHS_RELEASED"); do
+            pnpm --filter "./${path}" publish --no-git-checks
+          done
