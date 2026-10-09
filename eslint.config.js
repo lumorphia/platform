@@ -116,4 +116,14 @@ export default tseslint.config(
   storage,
   ops,
   opsSentry,
+  // 規約の本文は画面でも表示するので、ブラウザで動く形に保つ
+  {
+    files: ["packages/legal/**/*.ts"],
+    ...restrict([
+      SERVICES,
+      UMBRA,
+      DEEP,
+      { group: NODE_APIS, message: "legal はブラウザでも動く。Node API を使わない" },
+    ]),
+  },
 );
