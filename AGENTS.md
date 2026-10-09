@@ -29,6 +29,12 @@ docs/adr/         設計判断
 - `legal` は画面でも本文を表示するので Node API を使わない。ファイルの読み込みと同意の記録の形はサービスが決める
 - キーの付け方 (`tmp/`、`posts/` など) はサービスが決める。`storage` は知らない
 
+## ほかのリポジトリと共通の開発の道具 (ADR-0009)
+
+- `renovate/default.json`: Renovate の共通の設定。各リポジトリは `"extends": ["local>lumorphia/platform//renovate/default"]` で読む。Renovate は main の版を読むので、変えたら develop → main まで入れる
+- `.github/workflows/security.yml`・`release.yml`: 再利用ワークフロー (`on: workflow_call`)。このリポジトリの `ci.yml` は `./.github/workflows/...` で呼び、ほかは `lumorphia/platform/.github/workflows/<名前>.yml@<main の commit> # main` で呼ぶ。入力を変えたり消したりすると呼び出し側が壊れるので、足すだけにする
+- **手本** (パッケージにしない。新しいリポジトリはここから写す): `.prettierrc`、`.prettierignore`、`tsconfig.base.json`、`eslint.config.js` の共通の rules (`consistent-type-imports`、`no-unused-vars`)、`.gitleaks.toml`、`.husky/`、`package.json` の `lint-staged`、`release-please-config.json`
+
 ## 入れてよいデータ (public リポジトリ)
 
 - クレデンシャル (トークン、鍵、パスワード、`.env`) は入れない。husky の pre-commit と CI が gitleaks で検査する。テストの擬似の値は `test-` などで始める (`.gitleaks.toml`)
