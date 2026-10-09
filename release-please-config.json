@@ -62,6 +62,10 @@
     "packages/auth-client": {
       "component": "auth-client",
       "package-name": "@lumorphia/auth-client"
+    },
+    "packages/legal": {
+      "component": "legal",
+      "package-name": "@lumorphia/legal"
     }
   }
 }
