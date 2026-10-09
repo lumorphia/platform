@@ -80,4 +80,12 @@ describe("eslint boundaries", () => {
   it("lets the logger use pino", async () => {
     expect(await restricted("packages/ops/src/logger.ts", 'import "pino";')).toBe(false);
   });
+
+  it("keeps legal free of the services, the private umbra and Node APIs", async () => {
+    const file = "packages/legal/src/x.ts";
+    expect(await restricted(file, 'import "@prismtone/core";')).toBe(true);
+    expect(await restricted(file, 'import "@lumorphia/moderation";')).toBe(true);
+    // 画面でも本文を表示するので、ブラウザで動く形に保つ
+    expect(await restricted(file, 'import "node:fs";')).toBe(true);
+  });
 });
