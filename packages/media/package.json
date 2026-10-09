@@ -1,6 +1,6 @@
 {
   "name": "@lumorphia/media",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "画像の検証、メタデータの除去、派生画像とアイコンの生成 (sharp)。サーバーで動く",
   "license": "AGPL-3.0-only",
   "repository": {
