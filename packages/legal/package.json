@@ -1,6 +1,6 @@
 {
   "name": "@lumorphia/legal",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "規約とプライバシーポリシーの本文の読み取りと表示、同意した版と今の版の比較。ブラウザでも動く",
   "license": "AGPL-3.0-only",
   "repository": {
