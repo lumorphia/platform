@@ -13,4 +13,6 @@
 
 | [0007](0007-profile-from-userinfo.md) | 表示名とアイコンを UserInfo から渡し、handle を表示名に使わない |
 
+| [0008](0008-legal-package.md) | 規約の本文と同意の版の比較を @lumorphia/legal にまとめる |
+
 本文中の「prismtone ADR-NNNN」は lumorphia/prismtone の ADR を指す。
