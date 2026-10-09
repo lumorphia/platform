@@ -1,0 +1,75 @@
+name: security
+
+# Lumorphia の各リポジトリが PR で呼ぶ、シークレットの混入と高リスクの脆弱性の検査 (ADR-0009)。
+# アクションの版・gitleaks の版とチェックサム・Node の版は、ここで上げれば全部のリポジトリに効く。
+# 呼び出し側の例:
+#   security:
+#     if: github.event_name == 'pull_request'
+#     permissions: { contents: read, packages: read }
+#     uses: lumorphia/platform/.github/workflows/security.yml@<main の commit> # main
+#     with: { github-packages: true }
+on:
+  workflow_call:
+    inputs:
+      github-packages:
+        description: "private の @lumorphia/* を GitHub Packages から読むか (install に認証を付ける)"
+        type: boolean
+        default: false
+      audit-command:
+        description: "高リスクの脆弱性の検査。失敗にはせず、結果は Actions の注釈で見る"
+        type: string
+        default: pnpm audit --audit-level=high --prod
+      extra-command:
+        description: "追加の検査 (例: pnpm licenses:check)。空なら回さない。失敗はジョブの失敗にする"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      # gitleaks の本体 (CLI、MIT) を直接動かす。gitleaks-action は organization のリポジトリではライセンスキーが要る。
+      # 版とチェックサムは公式の gitleaks_<版>_checksums.txt から
+      - name: gitleaks (履歴全体)
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -euo pipefail
+          curl -fsSLo /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks git --redact --no-banner --verbose .
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - if: ${{ !inputs.github-packages }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+      - if: ${{ inputs.github-packages }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: "@lumorphia"
+      - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ inputs.github-packages && secrets.GITHUB_TOKEN || '' }}
+      # 失敗にすると、上流の修正を待つあいだ全ての PR が止まる。結果は Actions の注釈で見て、Renovate で上げる
+      - name: 高リスクの脆弱性 (警告)
+        run: ${{ inputs.audit-command }}
+        continue-on-error: true
+      - if: ${{ inputs.extra-command != '' }}
+        name: 追加の検査
+        run: ${{ inputs.extra-command }}
