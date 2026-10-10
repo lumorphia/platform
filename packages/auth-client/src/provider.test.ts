@@ -11,13 +11,18 @@ const issuer = "https://accounts.lumorphia.test/api/auth";
 const rp = "https://scenote.lumorphia.test";
 const clientId = "test-client";
 const clientSecret = "test-client-secret";
-const profile = {
+// lumorphia/accounts (Better Auth 1.7.7 の oauth-provider) は、アクセストークンを出すときは
+// email などの標準の claim を ID トークンに入れず、UserInfo でだけ返す (OIDC Core 5.4)
+const issuedProfile = {
   sub: "test-sub",
   sid: "test-sid",
-  email: "test-user@example.com",
-  email_verified: true,
   "https://lumorphia.com/handle": "test_handle",
   "https://lumorphia.com/legacy_pending": [],
+};
+const profile = {
+  ...issuedProfile,
+  email: "test-user@example.com",
+  email_verified: true,
 };
 // 表示名とアイコンは UserInfo からだけ読む
 const currentProfile = {
@@ -95,7 +100,7 @@ async function setup(
       expect(form.get("grant_type")).toBe("authorization_code");
       expect(form.get("code_verifier")).toBeTruthy();
       const idToken = await new SignJWT({
-        ...profile,
+        ...issuedProfile,
         nonce: authorization.searchParams.get("nonce"),
         ...overrides,
       })
@@ -241,6 +246,8 @@ describe("Better Auth generic-oauth integration", () => {
   });
   it.each([
     { name: undefined },
+    { email: undefined },
+    { email_verified: undefined },
     { picture: "http://accounts.lumorphia.test/avatar.webp" },
     { picture: "javascript:alert(1)" },
   ])("rejects a current profile %j before session creation", async (userinfo) => {
@@ -252,8 +259,6 @@ describe("Better Auth generic-oauth integration", () => {
     { nonce: "test-wrong-nonce" },
     { iss: "https://other.lumorphia.test/api/auth" },
     { aud: "test-other-client" },
-    { email: undefined },
-    { email_verified: undefined },
     { sub: "" },
     { sid: undefined },
     { "https://lumorphia.com/handle": undefined },
