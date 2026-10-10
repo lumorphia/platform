@@ -53,9 +53,8 @@ export function createLumorphiaOAuthConfig(
         requiredClaims: ["iss", "aud", "sub", "iat", "exp", "sid"],
       });
       const issuedClaims = parseLumorphiaClaims(payload, options);
-      claimString(payload.email);
-      if (typeof payload.email_verified !== "boolean")
-        throw new Error("Invalid email_verified claim");
+      // email は ID トークンに入らない (発行元はアクセストークンを出すとき標準の claim を UserInfo でだけ返す)。
+      // 下の UserInfo で確かめる
       if (!tokens.accessToken) return null;
       // 通知がまだ届いていない場合にも、ログインのたび発行元の現在の状態を確かめる。
       const response = await fetch(`${issuer}/oauth2/userinfo`, {
