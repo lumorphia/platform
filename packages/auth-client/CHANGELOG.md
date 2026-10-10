@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/lumorphia/platform/compare/auth-client-v1.1.0...auth-client-v1.1.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* ID トークンに email を求めず、本物の accounts でログインできるようにする ([572f60f](https://github.com/lumorphia/platform/commit/572f60f652e864e0cd8ca31d0f57c5d33d3d4557))
+
 ## [1.1.0](https://github.com/lumorphia/platform/compare/auth-client-v1.0.0...auth-client-v1.1.0) (2026-10-08)
 
 
