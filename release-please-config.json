@@ -66,6 +66,10 @@
     "packages/legal": {
       "component": "legal",
       "package-name": "@lumorphia/legal"
+    },
+    "packages/e2e": {
+      "component": "e2e",
+      "package-name": "@lumorphia/e2e"
     }
   }
 }

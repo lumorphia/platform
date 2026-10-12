@@ -116,6 +116,24 @@ export default tseslint.config(
   storage,
   ops,
   opsSentry,
+  // 発行元のふりは auth-client と別に作る。同じ実装からトークンを作ると、食い違いをテストで見つけられない
+  {
+    files: ["packages/e2e/**/*.ts"],
+    ignores: ["packages/e2e/**/*.test.ts"],
+    ...restrict([
+      SERVICES,
+      UMBRA,
+      DEEP,
+      {
+        group: ["@lumorphia/auth-client", "@lumorphia/auth-client/*"],
+        message: "e2e は auth-client の前に立つ偽物。auth-client はテストからだけ使う",
+      },
+    ]),
+  },
+  {
+    files: ["packages/e2e/**/*.test.ts"],
+    ...restrict([SERVICES, UMBRA, DEEP]),
+  },
   // 規約の本文は画面でも表示するので、ブラウザで動く形に保つ
   {
     files: ["packages/legal/**/*.ts"],
