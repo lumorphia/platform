@@ -1,6 +1,6 @@
 {
   "name": "@lumorphia/e2e",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "サービスの E2E の土台。Lumorphia アカウントの発行元のふり、E2E 専用の TLS、Playwright の helper と CSP の見張り",
   "license": "AGPL-3.0-only",
   "repository": {
