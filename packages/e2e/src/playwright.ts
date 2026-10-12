@@ -1,5 +1,5 @@
 import { expect, test as base, type Page } from "@playwright/test";
-import type { MockLumorphiaUser } from "./mock-issuer.ts";
+import { E2E_USER_COOKIE, encodeE2eUser, type MockLumorphiaUser } from "./mock-issuer.ts";
 
 export { lumorphiaUser } from "./users.ts";
 export type { MockLumorphiaUser } from "./mock-issuer.ts";
@@ -35,45 +35,26 @@ export const test = base.extend<{ cspViolations: string[] }>({
 export { expect };
 
 /**
- * Lumorphia の認可画面のふり。ブラウザが向かう認可要求を受け、nonce と利用者を発行元のふりに渡して
- * code をもらい、callback へ戻す。ログインし直すたびに、そのとき `user()` が返す利用者が使われる。
- * `loginPath` (既定は /login) がサーバーの 302 で認可へ送る形にも対応する。Chromium は 302 の先を
- * page.route に渡さないので、その応答を受けて、認可へ向かうならここで callback へ送り返す
+ * Lumorphia の認可画面のふり。発行元のふりの認可の口 (./mock-issuer.ts) が承認する利用者を、発行元のオリジンの
+ * Cookie に置く。ブラウザは本物と同じく認可へ移り、code を持って callback へ戻ってくる。もう一度呼ぶと、
+ * 次のログインからその利用者になる。
+ * `page.route` と `route.fetch` を使わないのは、route.fetch が Node から送るので Chromium の
+ * `--host-resolver-rules` (`*.lumorphia.test`) が効かず、302 の先も page.route に渡らないため
  */
 export async function approveLumorphia(
   page: Page,
-  user: () => MockLumorphiaUser,
+  user: MockLumorphiaUser,
   location: MockIssuerLocation,
-  options: { readonly loginPath?: string } = {},
-) {
-  const loginPath = options.loginPath ?? "/login";
-  const approve = async (authorize: URL) => {
-    const res = await page.request.post(`${location.controlUrl}/_e2e/authorize`, {
-      data: { nonce: authorize.searchParams.get("nonce"), user: user() },
-    });
-    const { code } = (await res.json()) as { code: string };
-    const back = new URL(authorize.searchParams.get("redirect_uri")!);
-    back.searchParams.set("code", code);
-    back.searchParams.set("state", authorize.searchParams.get("state")!);
-    return back.toString();
-  };
-  await page.route(`${location.issuer}/oauth2/authorize**`, async (route) => {
-    const back = await approve(new URL(route.request().url()));
-    await route.fulfill({ status: 302, headers: { location: back } });
-  });
-  await page.route(
-    (url) => url.pathname === loginPath,
-    async (route) => {
-      const res = await route.fetch({ maxRedirects: 0 });
-      const redirect = res.headers()["location"];
-      if (res.status() !== 302 || !redirect?.startsWith(`${location.issuer}/oauth2/authorize`)) {
-        await route.fulfill({ response: res });
-        return;
-      }
-      const back = await approve(new URL(redirect));
-      await route.fulfill({ status: 302, headers: { ...res.headers(), location: back } });
+): Promise<void> {
+  await page.context().addCookies([
+    {
+      name: E2E_USER_COOKIE,
+      value: encodeE2eUser(user),
+      url: new URL(location.issuer).origin,
+      secure: true,
+      sameSite: "None",
     },
-  );
+  ]);
 }
 
 /** accounts の back-channel logout のふり。アプリが返した HTTP の状態を返す */

@@ -25,6 +25,9 @@ export function mockIssuerOptionsFromEnv(
     appBaseUrl: required(env, "APP_BASE_URL"),
     port: Number(env.MOCK_LUMORPHIA_PORT ?? 3404),
     controlPort: Number(env.MOCK_LUMORPHIA_CONTROL_PORT ?? 3405),
+    ...(env.POST_LOGOUT_REDIRECT_ORIGINS
+      ? { postLogoutRedirectOrigins: env.POST_LOGOUT_REDIRECT_ORIGINS.split(",") }
+      : {}),
     ...(env.BACKCHANNEL_LOGOUT_PATH ? { backchannelLogoutPath: env.BACKCHANNEL_LOGOUT_PATH } : {}),
     ...(env.ACCOUNT_EVENTS_PATH ? { accountEventsPath: env.ACCOUNT_EVENTS_PATH } : {}),
   };

@@ -6,7 +6,13 @@ import {
   createLogoutTokenVerifier,
   createLumorphiaOAuthConfig,
 } from "@lumorphia/auth-client";
-import { startMockIssuer, type MockIssuer, type MockLumorphiaUser } from "./mock-issuer.ts";
+import {
+  E2E_USER_COOKIE,
+  encodeE2eUser,
+  startMockIssuer,
+  type MockIssuer,
+  type MockLumorphiaUser,
+} from "./mock-issuer.ts";
 
 // 発行元のふりが出すものを、サービスが使う auth-client そのもので確かめる。auth-client と食い違えば、
 // サービスの E2E が本物の accounts と違う形で通ってしまう
@@ -167,6 +173,82 @@ describe("login", () => {
   });
 });
 
+describe("authorization endpoint", () => {
+  const authorizeAs = (u: MockLumorphiaUser | null, params: Record<string, string> = defaults()) =>
+    fetch(`${mock.issuer}/oauth2/authorize?${new URLSearchParams(params)}`, {
+      redirect: "manual",
+      headers: u ? { cookie: `${E2E_USER_COOKIE}=${encodeE2eUser(u)}` } : {},
+    });
+  // appBaseUrl は beforeAll で決まるので、テストの中で組み立てる
+  const defaults = () => ({
+    client_id: CLIENT_ID,
+    redirect_uri: `${appBaseUrl}/api/auth/callback/lumorphia`,
+    state: "test-state",
+    nonce: "test-nonce",
+  });
+
+  it("approves the user in the cookie and sends the browser back with a code", async () => {
+    const res = await authorizeAs(user());
+    const back = new URL(res.headers.get("location")!);
+    expect(back.origin + back.pathname).toBe(defaults().redirect_uri);
+    expect(back.searchParams.get("state")).toBe("test-state");
+    expect(back.searchParams.get("code")).toBeTruthy();
+  });
+
+  it("issues a code for that user with the nonce of the request", async () => {
+    const u = user();
+    const res = await authorizeAs(u);
+    const code = new URL(res.headers.get("location")!).searchParams.get("code")!;
+    const { body } = await exchange(code);
+    const payload = JSON.parse(Buffer.from(body.id_token!.split(".")[1]!, "base64url").toString());
+    expect(payload).toMatchObject({ sub: u.sub, nonce: "test-nonce" });
+  });
+
+  it("refuses without a user to approve", async () => {
+    expect((await authorizeAs(null)).status).toBe(400);
+  });
+
+  it("refuses another client", async () => {
+    expect((await authorizeAs(user(), { ...defaults(), client_id: "test-other" })).status).toBe(
+      400,
+    );
+  });
+
+  it("refuses a broken redirect URI instead of hanging", async () => {
+    expect((await authorizeAs(user(), { ...defaults(), redirect_uri: "not a url" })).status).toBe(
+      400,
+    );
+  });
+});
+
+describe("end-session", () => {
+  const endSession = (params: Record<string, string>) =>
+    fetch(`${mock.issuer}/oauth2/end-session?${new URLSearchParams(params)}`, {
+      redirect: "manual",
+    });
+
+  it("sends the browser back to the service with the state", async () => {
+    const res = await endSession({
+      client_id: CLIENT_ID,
+      post_logout_redirect_uri: `${appBaseUrl}/api/lumorphia/signed-out`,
+      state: "test-state",
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(
+      `${appBaseUrl}/api/lumorphia/signed-out?state=test-state`,
+    );
+  });
+
+  it("refuses to send the browser to another site", async () => {
+    const res = await endSession({
+      client_id: CLIENT_ID,
+      post_logout_redirect_uri: "https://evil.example/",
+      state: "test-state",
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("accounts API", () => {
   it("returns the user's characters to the access token", async () => {
     const characters = [{ id: "test-character", lodestoneId: "1", name: "Test Chara" }];
@@ -203,6 +285,29 @@ describe("back-channel logout", () => {
       sub: u.sub,
       sid: u.sid,
     });
+  });
+
+  it("tells the test when the app cannot be reached, instead of hanging", async () => {
+    const lost = await startMockIssuer({
+      clientId: CLIENT_ID,
+      service: "scenote",
+      tls: {
+        cert: process.env.LUMORPHIA_E2E_TEST_CERT!,
+        key: process.env.LUMORPHIA_E2E_TEST_KEY!,
+      },
+      appBaseUrl: "http://127.0.0.1:1",
+    });
+    try {
+      const res = await fetch(`${lost.controlUrl}/_e2e/backchannel-logout`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sub: "test-sub", sid: "test-sid" }),
+      });
+      expect(res.status).toBe(502);
+      expect(((await res.json()) as { error: string }).error).toMatch(/app_unreachable/);
+    } finally {
+      await lost.close();
+    }
   });
 
   it("reports the status the app answered with", async () => {

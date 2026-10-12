@@ -32,6 +32,17 @@ describe("mockIssuerOptionsFromEnv", () => {
     expect(options).toMatchObject({ port: 3504, controlPort: 3505 });
   });
 
+  it("takes the origins end-session may send the browser back to", () => {
+    const options = mockIssuerOptionsFromEnv({
+      ...base,
+      POST_LOGOUT_REDIRECT_ORIGINS: "https://scenote.lumorphia.test:3445,https://127.0.0.1:3445",
+    });
+    expect(options.postLogoutRedirectOrigins).toEqual([
+      "https://scenote.lumorphia.test:3445",
+      "https://127.0.0.1:3445",
+    ]);
+  });
+
   it("refuses to start without a certificate", () => {
     expect(() => mockIssuerOptionsFromEnv({ ...base, MOCK_LUMORPHIA_CERT: undefined })).toThrow(
       /MOCK_LUMORPHIA_CERT/,

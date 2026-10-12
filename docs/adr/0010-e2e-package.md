@@ -16,8 +16,9 @@ ADR-0009 は「E2E の土台は Scenote の骨組みと一緒に切り出す」�
 
 - `@lumorphia/e2e` を作り、入口を 3 つに分ける
   - `./tls`: E2E 専用の CA と 127.0.0.1・localhost の証明書 (`ensureE2eTls`)、Chromium に証明書を信頼させる公開鍵のハッシュ (`certificateSpki`)
-  - `./mock-issuer`: 発行元のふり (`startMockIssuer`)。discovery・JWKS・token・UserInfo、accounts の `/api/characters`、サービスが足す API (`extraRoutes`。prismtone の引き継ぎの完了など)。テストからの操作で、認可の code、back-channel logout、退会の知らせ (送り直しを含む) を出す。bin の `lumorphia-mock-issuer` は環境変数で起動し、Playwright の webServer から使う
-  - `./playwright`: CSP の違反を見張る `test`、認可画面のふり (`approveLumorphia`)、back-channel logout と退会の知らせを送る helper、`lumorphiaUser`
+  - `./mock-issuer`: 発行元のふり (`startMockIssuer`)。discovery・JWKS・認可・token・UserInfo・end-session、accounts の `/api/characters`、サービスが足す API (`extraRoutes`。prismtone の引き継ぎの完了など)。テストからの操作で、認可の code、back-channel logout、退会の知らせ (送り直しを含む) を出す。アプリに届かないときは 502 と理由を返す (応答しないまま止まらない)。bin の `lumorphia-mock-issuer` は環境変数で起動し、Playwright の webServer から使う
+  - `./playwright`: CSP の違反を見張る `test`、`approveLumorphia`、back-channel logout と退会の知らせを送る helper、`lumorphiaUser`
+- **認可の画面は、偽の発行元が自分で承認する**。承認する利用者は、テストが発行元のオリジンの Cookie に置く (`approveLumorphia`)。prismtone の形 (`page.route` で認可の要求を受け、`route.fetch` でアプリの 302 をたどる) は、`route.fetch` が Node から送るので Chromium の `--host-resolver-rules` が効かず、`*.lumorphia.test` で動くサービス (Scenote) では使えなかった。Cookie はブラウザのコンテキストごとなので、並列のテストでも混ざらない
 - **偽の発行元が出すものは、auth-client そのもので確かめる** (`getUserInfo`、`createLogoutTokenVerifier`、`createAccountEventVerifier`)。auth-client を変えて偽物とずれたら、このリポジトリのテストが落ちる
 - **偽の発行元のコードは auth-client を import しない** (ESLint が止める)。同じ実装からトークンを作ると、ずれをテストで見つけられない。auth-client はテストからだけ使う
 - サービスごとの偽物 (Discord・Google の OAuth、Misskey、Mastodon、Lodestone) は切り出さない。使うのは accounts と prismtone の旧ログインだけで、Scenote は使わない
