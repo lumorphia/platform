@@ -11,6 +11,7 @@ packages/storage  @lumorphia/storage  オブジェクトストレージの境界
 packages/ops      @lumorphia/ops      運用の土台。入口は logger (pino、Node 専用)、notify (Discord)、sentry (伏せ字、ブラウザでも動く)
 packages/auth-client @lumorphia/auth-client OIDC のログイン・claim・ログアウト。DB はサービスのアダプターで受ける
 packages/legal    @lumorphia/legal    規約とプライバシーポリシーの本文の読み取りと表示、同意した版と今の版の比較 (ブラウザでも動く)
+packages/e2e      @lumorphia/e2e      サービスの E2E の土台。Lumorphia アカウントの発行元のふり、E2E 専用の TLS、Playwright の helper (ADR-0010)
 tooling/          リポジトリ全体の決まりのテスト (依存の向き、公開する package.json)
 docs/adr/         設計判断
 ```
@@ -28,6 +29,7 @@ docs/adr/         設計判断
 - `auth-client` は認証の境界だけ。画像・ストレージ・運用の実装に依存しない
 - `legal` は画面でも本文を表示するので Node API を使わない。ファイルの読み込みと同意の記録の形はサービスが決める
 - キーの付け方 (`tmp/`、`posts/` など) はサービスが決める。`storage` は知らない
+- `e2e` の発行元のふりは auth-client を import しない (同じ実装からトークンを作ると、ずれを見つけられない)。auth-client はテストからだけ使い、偽物が出すものを auth-client で確かめる (ADR-0010)
 
 ## ほかのリポジトリと共通の開発の道具 (ADR-0009)
 
