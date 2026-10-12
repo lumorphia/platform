@@ -1,0 +1,64 @@
+{
+  "name": "@lumorphia/e2e",
+  "version": "0.0.0",
+  "description": "サービスの E2E の土台。Lumorphia アカウントの発行元のふり、E2E 専用の TLS、Playwright の helper と CSP の見張り",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lumorphia/platform.git",
+    "directory": "packages/e2e"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "type": "module",
+  "exports": {
+    "./tls": {
+      "source": "./src/tls.ts",
+      "types": "./dist/tls.d.ts",
+      "default": "./dist/tls.js"
+    },
+    "./mock-issuer": {
+      "source": "./src/mock-issuer.ts",
+      "types": "./dist/mock-issuer.d.ts",
+      "default": "./dist/mock-issuer.js"
+    },
+    "./playwright": {
+      "source": "./src/playwright.ts",
+      "types": "./dist/playwright.d.ts",
+      "default": "./dist/playwright.js"
+    }
+  },
+  "bin": {
+    "lumorphia-mock-issuer": "./dist/bin/mock-issuer.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepack": "cp ../../LICENSE LICENSE",
+    "postpack": "rm -f LICENSE"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts",
+    "!src/test-setup.ts"
+  ],
+  "dependencies": {
+    "jose": "6.2.12"
+  },
+  "peerDependencies": {
+    "@playwright/test": "^1.63.0"
+  },
+  "peerDependenciesMeta": {
+    "@playwright/test": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@lumorphia/auth-client": "workspace:*",
+    "@playwright/test": "^1.63.0",
+    "better-auth": "1.7.7"
+  }
+}

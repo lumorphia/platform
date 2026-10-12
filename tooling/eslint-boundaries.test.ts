@@ -88,4 +88,22 @@ describe("eslint boundaries", () => {
     // 画面でも本文を表示するので、ブラウザで動く形に保つ
     expect(await restricted(file, 'import "node:fs";')).toBe(true);
   });
+
+  it("keeps e2e free of the services and the private umbra", async () => {
+    const file = "packages/e2e/src/x.ts";
+    expect(await restricted(file, 'import "@scenote/core";')).toBe(true);
+    expect(await restricted(file, 'import "@lumorphia/moderation";')).toBe(true);
+  });
+
+  it("keeps the mock issuer apart from the auth-client it stands in front of", async () => {
+    // 同じ実装からトークンを作ると、食い違いをテストで見つけられない。auth-client はテストからだけ使う
+    expect(await restricted("packages/e2e/src/x.ts", 'import "@lumorphia/auth-client";')).toBe(
+      true,
+    );
+  });
+
+  it("lets the e2e tests check the mock issuer with auth-client", async () => {
+    const code = 'import "@lumorphia/auth-client";';
+    expect(await restricted("packages/e2e/src/x.test.ts", code)).toBe(false);
+  });
 });
