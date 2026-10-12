@@ -55,6 +55,11 @@ export interface MockIssuerOptions {
   /** 0 なら空いているポート */
   readonly port?: number;
   readonly controlPort?: number;
+  /**
+   * end-session から戻してよいオリジン。既定は appBaseUrl のオリジン。ブラウザが開くホスト名
+   * (`https://scenote.lumorphia.test:3445` など) が appBaseUrl と違うときに渡す
+   */
+  readonly postLogoutRedirectOrigins?: readonly string[];
   readonly backchannelLogoutPath?: string;
   readonly accountEventsPath?: string;
   readonly extraRoutes?: MockIssuerRoute;
@@ -80,6 +85,26 @@ type Lifecycle = {
 };
 
 const RECOVERY_MS = 30 * 86_400_000;
+
+class AppUnreachable extends Error {}
+
+/**
+ * 認可の口 (GET /oauth2/authorize) で承認する利用者を渡す Cookie。発行元のオリジンに置く (./playwright.ts)。
+ * ブラウザのコンテキストごとに持つので、並列のテストでも混ざらない
+ */
+export const E2E_USER_COOKIE = "lumorphia_e2e_user";
+
+export function encodeE2eUser(user: MockLumorphiaUser): string {
+  return Buffer.from(JSON.stringify(user)).toString("base64url");
+}
+
+const cookieValue = (req: IncomingMessage, name: string): string | null => {
+  for (const part of (req.headers.cookie ?? "").split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name) return rest.join("=");
+  }
+  return null;
+};
 
 const json = (res: ServerResponse, status: number, body: unknown) => {
   res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
@@ -120,6 +145,9 @@ export async function startMockIssuer(options: MockIssuerOptions): Promise<MockI
   const backchannelLogoutPath =
     options.backchannelLogoutPath ?? "/api/lumorphia/backchannel-logout";
   const accountEventsPath = options.accountEventsPath ?? "/api/lumorphia/account-events";
+  const postLogoutOrigins = new Set(
+    (options.postLogoutRedirectOrigins ?? [options.appBaseUrl]).map((url) => new URL(url).origin),
+  );
   const keys = await generateKeyPair("EdDSA");
   const kid = "e2e-key";
   const jwk = { ...(await exportJWK(keys.publicKey)), kid, alg: "EdDSA" };
@@ -139,12 +167,18 @@ export async function startMockIssuer(options: MockIssuerOptions): Promise<MockI
       .setIssuedAt();
 
   const postToApp = async (path: string, form: Record<string, string>) => {
-    const res = await fetch(new URL(path, options.appBaseUrl), {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams(form).toString(),
-    });
-    return res.status;
+    try {
+      const res = await fetch(new URL(path, options.appBaseUrl), {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(form).toString(),
+      });
+      return res.status;
+    } catch (error) {
+      // アプリに届かない (証明書を信頼していない、起動していない)。テストに理由を返す
+      const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
+      throw new AppUnreachable(cause instanceof Error ? cause.message : String(cause));
+    }
   };
 
   const sendAccountEvent = async (eventId: string) => {
@@ -172,6 +206,39 @@ export async function startMockIssuer(options: MockIssuerOptions): Promise<MockI
           id_token_signing_alg_values_supported: ["EdDSA"],
         });
       if (url.pathname === "/api/auth/jwks") return json(res, 200, { keys: [jwk] });
+      // 認可の画面のふり。Cookie の利用者をそのまま承認し、code を付けて戻す (同意の画面は出さない。
+      // 自社クライアントは accounts でも同意を省く)
+      if (url.pathname === "/api/auth/oauth2/authorize" && req.method === "GET") {
+        const encoded = cookieValue(req, E2E_USER_COOKIE);
+        const redirectUri = url.searchParams.get("redirect_uri");
+        if (
+          !encoded ||
+          !redirectUri ||
+          !URL.canParse(redirectUri) ||
+          url.searchParams.get("client_id") !== options.clientId
+        )
+          return json(res, 400, { error: "invalid_request" });
+        const user = JSON.parse(Buffer.from(encoded, "base64url").toString()) as MockLumorphiaUser;
+        const code = randomUUID();
+        codes.set(code, { user, nonce: url.searchParams.get("nonce") ?? "" });
+        const back = new URL(redirectUri);
+        back.searchParams.set("code", code);
+        const state = url.searchParams.get("state");
+        if (state) back.searchParams.set("state", state);
+        res.writeHead(302, { location: back.href, "cache-control": "no-store" });
+        return res.end();
+      }
+      // accounts のログアウト。確認の画面は出さず、登録した戻り先へ state を付けて戻す
+      if (url.pathname === "/api/auth/oauth2/end-session") {
+        const back = url.searchParams.get("post_logout_redirect_uri");
+        if (!back || !URL.canParse(back) || !postLogoutOrigins.has(new URL(back).origin))
+          return json(res, 400, { error: "invalid_request" });
+        const location = new URL(back);
+        const state = url.searchParams.get("state");
+        if (state) location.searchParams.set("state", state);
+        res.writeHead(302, { location: location.href, "cache-control": "no-store" });
+        return res.end();
+      }
       if (url.pathname === "/api/auth/oauth2/token" && req.method === "POST") {
         const form = new URLSearchParams(await readBody(req));
         const code = form.get("code") ?? "";
@@ -222,7 +289,15 @@ export async function startMockIssuer(options: MockIssuerOptions): Promise<MockI
     },
   );
 
-  const controlServer = createHttpServer(async (req, res) => {
+  const controlServer = createHttpServer((req, res) => {
+    control(req, res).catch((error: unknown) => {
+      if (error instanceof AppUnreachable)
+        return json(res, 502, { error: `app_unreachable: ${error.message}` });
+      return json(res, 500, { error: error instanceof Error ? error.message : String(error) });
+    });
+  });
+
+  const control = async (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     if (url.pathname === "/health") return json(res, 200, { ok: true });
     if (req.method !== "POST") return json(res, 404, { error: "not_found" });
@@ -278,7 +353,7 @@ export async function startMockIssuer(options: MockIssuerOptions): Promise<MockI
       return json(res, 200, { eventId, status: await sendAccountEvent(eventId) });
     }
     return json(res, 404, { error: "not_found" });
-  });
+  };
 
   const port = await listen(issuerServer, options.port ?? 0);
   issuer = `https://127.0.0.1:${port}/api/auth`;
